@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "Loop Player",
+    "slug": "loop-player",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "loopplayer",
+    "newArchEnabled": true,
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0D1117"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.masrudyn.loopplayer",
+      "infoPlist": {
+        "UIUserInterfaceStyle": "Dark",
+        "UIBackgroundModes": ["audio"]
+      }
+    },
+    "android": {
+      "adaptiveIcon": { "backgroundColor": "#0D1117" },
+      "edgeToEdgeEnabled": true,
+      "package": "com.masrudyn.loopplayer"
+    },
+    "web": { "favicon": "./assets/favicon.png" },
+    "plugins": [
+      [
+        "expo-av",
+        {
+          "audioSession": {
+            "category": "playback",
+            "mode": "default",
+            "options": ["mixWithOthers"]
+          }
+        }
+      ]
+    ]
+  }
+}

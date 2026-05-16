@@ -1,27 +1,57 @@
 import { create } from 'zustand';
 import * as FileSystem from 'expo-file-system';
-import { Audio } from 'expo-av';
 
 const DOCUMENTS_DIR = FileSystem.documentDirectory;
 
+// Lazy-load expo-av only when actually needed
+let Audio = null;
+async function getAudio() {
+  if (!Audio) {
+    try {
+      const av = await import('expo-av');
+      Audio = av.Audio;
+    } catch (e) {
+      // expo-av native modules not available (e.g. Expo Go)
+      // Return a no-op stub so the UI still works
+      Audio = {
+        Sound: class Sound {
+          async loadAsync() {}
+          async playAsync() {}
+          async pauseAsync() {}
+          async stopAsync() {}
+          async unloadAsync() {}
+          async setPositionAsync() {}
+          async setRateAsync() {}
+          async setIsAsyncEnabledAsync() {}
+          async getStatusAsync() {
+            return { positionMillis: 0, durationMillis: 0, isPlaying: false };
+          }
+        },
+      };
+    }
+  }
+  return Audio;
+}
+
 export const usePlayerStore = create((set, get) => ({
   // State
-  selectedFile: null,       // queued file to load when player opens
-  audioFile: null,          // { id, name, uri, duration, savedLoops }
+  selectedFile: null,
+  audioFile: null,
   isPlaying: false,
   currentTime: 0,
   duration: 0,
   playbackRate: 1.0,
-  loopRegion: null,         // { pointA, pointB, delay, enabled }
+  loopRegion: null,
   sound: null,
 
   // --- Audio control ---
   async loadFile(file) {
+    const AudioModule = await getAudio();
     const { sound } = get();
     if (sound) { await sound.stopAsync(); await sound.unloadAsync(); }
     try {
-      const newSound = new Audio.Sound();
-      await newSound.loadAsync({ uri: file.uri }, {}, true); // true = enableRate
+      const newSound = new AudioModule.Sound();
+      await newSound.loadAsync({ uri: file.uri }, {}, true);
       const status = await newSound.getStatusAsync();
       const dur = status.durationMillis ? status.durationMillis / 1000 : 0;
       set({
@@ -88,7 +118,7 @@ export const usePlayerStore = create((set, get) => ({
     if (!sound) return;
     const clamped = Math.max(0.25, Math.min(4.0, rate));
     try {
-      await sound.setRateAsync(clamped, true); // true = preserve pitch
+      await sound.setRateAsync(clamped, true);
       set({ playbackRate: clamped });
     } catch (e) { console.error(e); }
   },
@@ -178,7 +208,6 @@ export const usePlayerStore = create((set, get) => ({
   async deleteFile(file) {
     try {
       await FileSystem.deleteAsync(file.uri, { idempotent: true });
-      // Also delete persisted loops
       const loopsDir = DOCUMENTS_DIR + 'loops/';
       const loopsFile = loopsDir + file.name + '.json';
       try { await FileSystem.deleteAsync(loopsFile, { idempotent: true }); } catch {}
@@ -199,7 +228,6 @@ export const usePlayerStore = create((set, get) => ({
         const current = (status.positionMillis || 0) / 1000;
         const dur = status.durationMillis ? status.durationMillis / 1000 : 0;
 
-        // Loop boundary check
         const loop = get().loopRegion;
         if (loop?.enabled && current >= loop.pointB) {
           if (loop.delay > 0) {
@@ -217,7 +245,6 @@ export const usePlayerStore = create((set, get) => ({
           }
         }
 
-        // Auto-stop at end
         if (!loop?.enabled && current >= dur && dur > 0) {
           set({ isPlaying: false, currentTime: current });
           get()._stopProgress();

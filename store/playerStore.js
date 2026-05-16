@@ -1,9 +1,30 @@
 import { create } from 'zustand';
-import * as FileSystem from 'expo-file-system';
 
-const DOCUMENTS_DIR = FileSystem.documentDirectory;
+// Lazy-load expo-file-system — not available in Expo Go
+let FileSystem = null;
+async function getFileSystem() {
+  if (!FileSystem) {
+    try {
+      const fs = await import('expo-file-system');
+      FileSystem = fs.default || fs;
+    } catch (e) {
+      // expo-file-system native modules not available (Expo Go)
+      FileSystem = {
+        documentDirectory: 'file:///expo-go-mock/',
+        async readDirectoryAsync() { return []; },
+        async copyAsync() {},
+        async deleteAsync() {},
+        async getInfoAsync() { return { exists: false }; },
+        async makeDirectoryAsync() {},
+        async writeAsStringAsync() {},
+        async readAsStringAsync() { return '[]'; },
+      };
+    }
+  }
+  return FileSystem;
+}
 
-// Lazy-load expo-av only when actually needed
+// Lazy-load expo-av — not available in Expo Go
 let Audio = null;
 async function getAudio() {
   if (!Audio) {
@@ -11,8 +32,6 @@ async function getAudio() {
       const av = await import('expo-av');
       Audio = av.Audio;
     } catch (e) {
-      // expo-av native modules not available (e.g. Expo Go)
-      // Return a no-op stub so the UI still works
       Audio = {
         Sound: class Sound {
           async loadAsync() {}
@@ -151,7 +170,6 @@ export const usePlayerStore = create((set, get) => ({
     const newLoops = [...audioFile.savedLoops, loop];
     const updatedFile = { ...audioFile, savedLoops: newLoops };
     set({ audioFile: updatedFile });
-    persistLoops(updatedFile);
     return loop;
   },
 
@@ -172,45 +190,50 @@ export const usePlayerStore = create((set, get) => ({
     const newLoops = audioFile.savedLoops.filter(l => l.id !== loopId);
     const updatedFile = { ...audioFile, savedLoops: newLoops };
     set({ audioFile: updatedFile });
-    persistLoops(updatedFile);
   },
 
   // --- File management ---
   async scanFiles() {
+    const fs = await getFileSystem();
     try {
-      const dir = DOCUMENTS_DIR;
-      const contents = await FileSystem.readDirectoryAsync(dir);
+      const dir = fs.documentDirectory;
+      const contents = await fs.readDirectoryAsync(dir);
       const audioExts = ['mp3', 'm4a', 'aac', 'wav', 'flac', 'ogg', 'aiff', 'wma'];
       const files = [];
       for (const item of contents) {
         if (item === 'loops' || item === '.expo-internal') continue;
         const ext = item.split('.').pop().toLowerCase();
         if (!audioExts.includes(ext)) continue;
-        const uri = FileSystem.documentDirectory + item;
-        const loops = await loadLoops(item);
+        const uri = fs.documentDirectory + item;
+        const loops = await loadLoops(item, fs);
         const name = item.replace(/\.[^.]+$/, '');
         files.push({ id: uri, name, uri, savedLoops: loops });
       }
       files.sort((a, b) => a.name.localeCompare(b.name));
       set({ library: files });
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error('scanFiles error:', e);
+      set({ library: [] });
+    }
   },
 
   async importFile(sourceUri) {
+    const fs = await getFileSystem();
     try {
       const filename = sourceUri.split('/').pop() || 'imported';
-      const destUri = DOCUMENTS_DIR + filename;
-      await FileSystem.copyAsync({ from: sourceUri, to: destUri });
+      const destUri = fs.documentDirectory + filename;
+      await fs.copyAsync({ from: sourceUri, to: destUri });
       await get().scanFiles();
     } catch (e) { console.error(e); }
   },
 
   async deleteFile(file) {
+    const fs = await getFileSystem();
     try {
-      await FileSystem.deleteAsync(file.uri, { idempotent: true });
-      const loopsDir = DOCUMENTS_DIR + 'loops/';
+      await fs.deleteAsync(file.uri, { idempotent: true });
+      const loopsDir = fs.documentDirectory + 'loops/';
       const loopsFile = loopsDir + file.name + '.json';
-      try { await FileSystem.deleteAsync(loopsFile, { idempotent: true }); } catch {}
+      try { await fs.deleteAsync(loopsFile, { idempotent: true }); } catch {}
       await get().scanFiles();
     } catch (e) { console.error(e); }
   },
@@ -264,25 +287,23 @@ export const usePlayerStore = create((set, get) => ({
 }));
 
 // --- Persistence helpers ---
-const LOOPS_DIR = FileSystem.documentDirectory + 'loops/';
-
-async function ensureLoopsDir() {
-  const dirInfo = await FileSystem.getInfoAsync(LOOPS_DIR);
-  if (!dirInfo.exists) await FileSystem.makeDirectoryAsync(LOOPS_DIR, { intermediates: true });
+async function ensureLoopsDir(fs) {
+  const dirInfo = await fs.getInfoAsync(fs.documentDirectory + 'loops/');
+  if (!dirInfo.exists) await fs.makeDirectoryAsync(fs.documentDirectory + 'loops/', { intermediates: true });
 }
 
-async function persistLoops(file) {
-  await ensureLoopsDir();
-  const path = LOOPS_DIR + file.name + '.json';
-  await FileSystem.writeAsStringAsync(path, JSON.stringify(file.savedLoops));
+async function persistLoops(file, fs) {
+  await ensureLoopsDir(fs);
+  const path = fs.documentDirectory + 'loops/' + file.name + '.json';
+  await fs.writeAsStringAsync(path, JSON.stringify(file.savedLoops));
 }
 
-async function loadLoops(filename) {
+async function loadLoops(filename, fs) {
   try {
-    const path = LOOPS_DIR + filename + '.json';
-    const info = await FileSystem.getInfoAsync(path);
+    const path = fs.documentDirectory + 'loops/' + filename + '.json';
+    const info = await fs.getInfoAsync(path);
     if (!info.exists) return [];
-    const raw = await FileSystem.readAsStringAsync(path);
+    const raw = await fs.readAsStringAsync(path);
     return JSON.parse(raw);
   } catch { return []; }
 }

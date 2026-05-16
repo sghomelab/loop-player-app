@@ -1,30 +1,30 @@
 import { create } from 'zustand';
 
-// Lazy-load expo-file-system — not available in Expo Go
-let FileSystem = null;
-async function getFileSystem() {
-  if (!FileSystem) {
-    try {
-      const fs = await import('expo-file-system');
-      FileSystem = fs.default || fs;
-    } catch (e) {
-      // expo-file-system native modules not available (Expo Go)
-      FileSystem = {
-        documentDirectory: 'file:///expo-go-mock/',
-        async readDirectoryAsync() { return []; },
-        async copyAsync() {},
-        async deleteAsync() {},
-        async getInfoAsync() { return { exists: false }; },
-        async makeDirectoryAsync() {},
-        async writeAsStringAsync() {},
-        async readAsStringAsync() { return '[]'; },
-      };
-    }
+// Synchronous mock for expo-file-system — available immediately
+const FileSystemMock = {
+  documentDirectory: 'file:///expo-go-mock/',
+  cacheDirectory: 'file:///expo-go-mock-cache/',
+  async readDirectoryAsync() { return []; },
+  async copyAsync() {},
+  async deleteAsync() {},
+  async getInfoAsync() { return { exists: false }; },
+  async makeDirectoryAsync() {},
+  async writeAsStringAsync() {},
+  async readAsStringAsync() { return '[]'; },
+};
+
+// Try to load real expo-file-system, fall back to mock
+let FileSystem = FileSystemMock;
+try {
+  const realFS = require('expo-file-system');
+  if (realFS && realFS.documentDirectory) {
+    FileSystem = realFS;
   }
-  return FileSystem;
+} catch (e) {
+  // expo-file-system not available in Expo Go — use mock
 }
 
-// Lazy-load expo-av — not available in Expo Go
+// Lazy-load expo-av only when needed
 let Audio = null;
 async function getAudio() {
   if (!Audio) {
@@ -52,8 +52,9 @@ async function getAudio() {
   return Audio;
 }
 
+const DOCUMENTS_DIR = FileSystem.documentDirectory;
+
 export const usePlayerStore = create((set, get) => ({
-  // State
   selectedFile: null,
   audioFile: null,
   isPlaying: false,
@@ -63,7 +64,6 @@ export const usePlayerStore = create((set, get) => ({
   loopRegion: null,
   sound: null,
 
-  // --- Audio control ---
   async loadFile(file) {
     const AudioModule = await getAudio();
     const { sound } = get();
@@ -155,16 +155,12 @@ export const usePlayerStore = create((set, get) => ({
     }
   },
 
-  // --- Saved loops ---
   saveLoop(name, pointA, pointB, delay) {
     const { audioFile } = get();
     if (!audioFile) return null;
     const loop = {
       id: crypto.randomUUID?.() || Date.now().toString(),
-      name,
-      pointA,
-      pointB,
-      delay,
+      name, pointA, pointB, delay,
       createdAt: Date.now(),
     };
     const newLoops = [...audioFile.savedLoops, loop];
@@ -175,10 +171,8 @@ export const usePlayerStore = create((set, get) => ({
 
   loadLoop(loop) {
     const region = {
-      pointA: loop.pointA,
-      pointB: loop.pointB,
-      delay: loop.delay,
-      enabled: true,
+      pointA: loop.pointA, pointB: loop.pointB,
+      delay: loop.delay, enabled: true,
     };
     set({ loopRegion: region });
     get().seekTo(loop.pointA);
@@ -188,24 +182,21 @@ export const usePlayerStore = create((set, get) => ({
     const { audioFile } = get();
     if (!audioFile) return;
     const newLoops = audioFile.savedLoops.filter(l => l.id !== loopId);
-    const updatedFile = { ...audioFile, savedLoops: newLoops };
-    set({ audioFile: updatedFile });
+    set({ audioFile: { ...audioFile, savedLoops: newLoops } });
   },
 
-  // --- File management ---
   async scanFiles() {
-    const fs = await getFileSystem();
     try {
-      const dir = fs.documentDirectory;
-      const contents = await fs.readDirectoryAsync(dir);
+      const dir = DOCUMENTS_DIR;
+      const contents = await FileSystem.readDirectoryAsync(dir);
       const audioExts = ['mp3', 'm4a', 'aac', 'wav', 'flac', 'ogg', 'aiff', 'wma'];
       const files = [];
       for (const item of contents) {
         if (item === 'loops' || item === '.expo-internal') continue;
         const ext = item.split('.').pop().toLowerCase();
         if (!audioExts.includes(ext)) continue;
-        const uri = fs.documentDirectory + item;
-        const loops = await loadLoops(item, fs);
+        const uri = DOCUMENTS_DIR + item;
+        const loops = await loadLoops(item);
         const name = item.replace(/\.[^.]+$/, '');
         files.push({ id: uri, name, uri, savedLoops: loops });
       }
@@ -218,27 +209,24 @@ export const usePlayerStore = create((set, get) => ({
   },
 
   async importFile(sourceUri) {
-    const fs = await getFileSystem();
     try {
       const filename = sourceUri.split('/').pop() || 'imported';
-      const destUri = fs.documentDirectory + filename;
-      await fs.copyAsync({ from: sourceUri, to: destUri });
+      const destUri = DOCUMENTS_DIR + filename;
+      await FileSystem.copyAsync({ from: sourceUri, to: destUri });
       await get().scanFiles();
     } catch (e) { console.error(e); }
   },
 
   async deleteFile(file) {
-    const fs = await getFileSystem();
     try {
-      await fs.deleteAsync(file.uri, { idempotent: true });
-      const loopsDir = fs.documentDirectory + 'loops/';
+      await FileSystem.deleteAsync(file.uri, { idempotent: true });
+      const loopsDir = DOCUMENTS_DIR + 'loops/';
       const loopsFile = loopsDir + file.name + '.json';
-      try { await fs.deleteAsync(loopsFile, { idempotent: true }); } catch {}
+      try { await FileSystem.deleteAsync(loopsFile, { idempotent: true }); } catch {}
       await get().scanFiles();
     } catch (e) { console.error(e); }
   },
 
-  // --- Internal ---
   _progressTimer: null,
   _startProgress() {
     const { _stopProgress } = get();
@@ -250,7 +238,6 @@ export const usePlayerStore = create((set, get) => ({
         const status = await sound.getStatusAsync();
         const current = (status.positionMillis || 0) / 1000;
         const dur = status.durationMillis ? status.durationMillis / 1000 : 0;
-
         const loop = get().loopRegion;
         if (loop?.enabled && current >= loop.pointB) {
           if (loop.delay > 0) {
@@ -267,13 +254,11 @@ export const usePlayerStore = create((set, get) => ({
             await sound.setPositionAsync(loop.pointA * 1000);
           }
         }
-
         if (!loop?.enabled && current >= dur && dur > 0) {
           set({ isPlaying: false, currentTime: current });
           get()._stopProgress();
           return;
         }
-
         set({ currentTime: current });
       } catch (e) { /* ignore */ }
     };
@@ -287,23 +272,24 @@ export const usePlayerStore = create((set, get) => ({
 }));
 
 // --- Persistence helpers ---
-async function ensureLoopsDir(fs) {
-  const dirInfo = await fs.getInfoAsync(fs.documentDirectory + 'loops/');
-  if (!dirInfo.exists) await fs.makeDirectoryAsync(fs.documentDirectory + 'loops/', { intermediates: true });
+const LOOPS_DIR = DOCUMENTS_DIR + 'loops/';
+
+async function ensureLoopsDir() {
+  const dirInfo = await FileSystem.getInfoAsync(LOOPS_DIR);
+  if (!dirInfo.exists) await FileSystem.makeDirectoryAsync(LOOPS_DIR, { intermediates: true });
 }
 
-async function persistLoops(file, fs) {
-  await ensureLoopsDir(fs);
-  const path = fs.documentDirectory + 'loops/' + file.name + '.json';
-  await fs.writeAsStringAsync(path, JSON.stringify(file.savedLoops));
+async function persistLoops(file) {
+  await ensureLoopsDir();
+  await FileSystem.writeAsStringAsync(LOOPS_DIR + file.name + '.json', JSON.stringify(file.savedLoops));
 }
 
-async function loadLoops(filename, fs) {
+async function loadLoops(filename) {
   try {
-    const path = fs.documentDirectory + 'loops/' + filename + '.json';
-    const info = await fs.getInfoAsync(path);
+    const path = LOOPS_DIR + filename + '.json';
+    const info = await FileSystem.getInfoAsync(path);
     if (!info.exists) return [];
-    const raw = await fs.readAsStringAsync(path);
+    const raw = await FileSystem.readAsStringAsync(path);
     return JSON.parse(raw);
   } catch { return []; }
 }

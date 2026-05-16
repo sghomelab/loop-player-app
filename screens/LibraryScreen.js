@@ -5,17 +5,17 @@ import {
 } from 'react-native';
 import { usePlayerStore } from '../store/playerStore';
 
-// Lazy-load expo-document-picker — not available in Expo Go
-let DocumentPicker = null;
-async function getDocumentPicker() {
-  if (!DocumentPicker) {
-    try {
-      DocumentPicker = await import('expo-document-picker');
-    } catch (e) {
-      console.warn('expo-document-picker not available (Expo Go)');
-    }
+// Synchronous mock for expo-document-picker — available immediately
+let DocumentPicker = {
+  getDocumentAsync: () => Promise.resolve({ canceled: true }),
+};
+try {
+  const realDP = require('expo-document-picker');
+  if (realDP && realDP.getDocumentAsync) {
+    DocumentPicker = realDP;
   }
-  return DocumentPicker;
+} catch (e) {
+  // expo-document-picker not available in Expo Go — use mock
 }
 
 export default function LibraryScreen({ navigation }) {
@@ -24,13 +24,8 @@ export default function LibraryScreen({ navigation }) {
   React.useEffect(() => { scanFiles(); }, []);
 
   const handleImport = async () => {
-    const DocPicker = await getDocumentPicker();
-    if (!DocPicker) {
-      Alert.alert('Not Available', 'File import requires a production build.\n\nUse EAS Build to test this feature.');
-      return;
-    }
     try {
-      const result = await DocPicker.getDocumentAsync({
+      const result = await DocumentPicker.getDocumentAsync({
         type: ['audio/mpeg', 'audio/mp4', 'audio/x-m4a', 'audio/aac',
                'audio/wav', 'audio/x-wav', 'audio/flac', 'audio/ogg',
                'audio/*'],
@@ -40,7 +35,9 @@ export default function LibraryScreen({ navigation }) {
       if (!result.canceled && result.assets?.[0]) {
         await importFile(result.assets[0].uri);
       }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      Alert.alert('Not Available', 'File import requires a production build.\n\nUse EAS Build to test this feature.');
+    }
   };
 
   const handleDelete = (file) => {

@@ -3,8 +3,20 @@ import {
   View, Text, FlatList, StyleSheet, TouchableOpacity,
   SafeAreaView, Alert,
 } from 'react-native';
-import * as DocumentPicker from 'expo-document-picker';
 import { usePlayerStore } from '../store/playerStore';
+
+// Lazy-load expo-document-picker — not available in Expo Go
+let DocumentPicker = null;
+async function getDocumentPicker() {
+  if (!DocumentPicker) {
+    try {
+      DocumentPicker = await import('expo-document-picker');
+    } catch (e) {
+      console.warn('expo-document-picker not available (Expo Go)');
+    }
+  }
+  return DocumentPicker;
+}
 
 export default function LibraryScreen({ navigation }) {
   const { library, scanFiles, importFile, deleteFile } = usePlayerStore();
@@ -12,8 +24,13 @@ export default function LibraryScreen({ navigation }) {
   React.useEffect(() => { scanFiles(); }, []);
 
   const handleImport = async () => {
+    const DocPicker = await getDocumentPicker();
+    if (!DocPicker) {
+      Alert.alert('Not Available', 'File import requires a production build.\n\nUse EAS Build to test this feature.');
+      return;
+    }
     try {
-      const result = await DocumentPicker.getDocumentAsync({
+      const result = await DocPicker.getDocumentAsync({
         type: ['audio/mpeg', 'audio/mp4', 'audio/x-m4a', 'audio/aac',
                'audio/wav', 'audio/x-wav', 'audio/flac', 'audio/ogg',
                'audio/*'],

@@ -68,7 +68,7 @@ export default function LibraryScreen({ navigation }) {
           </Text>
         </View>
       </View>
-      <TouchableOpacity onPress={handleDelete} style={{ padding: 8 }}>
+      <TouchableOpacity onPress={() => handleDelete(file)} style={{ padding: 8 }}>
         <Text style={{ color: '#F85149', fontSize: 18 }}>🗑️</Text>
       </TouchableOpacity>
     </TouchableOpacity>

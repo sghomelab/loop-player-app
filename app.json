@@ -12,7 +12,7 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.masrudyn.loopplayer",
+      "bundleIdentifier": "com.nurlogic.loopplayer",
       "infoPlist": {
         "UIUserInterfaceStyle": "Dark",
         "UIBackgroundModes": [
@@ -25,7 +25,7 @@
         "backgroundColor": "#0D1117"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.masrudyn.loopplayer"
+      "package": "com.nurlogic.loopplayer"
     },
     "web": {
       "favicon": "./assets/favicon.png"

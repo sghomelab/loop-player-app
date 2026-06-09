@@ -166,6 +166,7 @@ export const usePlayerStore = create((set, get) => ({
     const newLoops = [...audioFile.savedLoops, loop];
     const updatedFile = { ...audioFile, savedLoops: newLoops };
     set({ audioFile: updatedFile });
+    persistLoops(updatedFile);
     return loop;
   },
 
@@ -182,7 +183,9 @@ export const usePlayerStore = create((set, get) => ({
     const { audioFile } = get();
     if (!audioFile) return;
     const newLoops = audioFile.savedLoops.filter(l => l.id !== loopId);
-    set({ audioFile: { ...audioFile, savedLoops: newLoops } });
+    const updatedFile = { ...audioFile, savedLoops: newLoops };
+    set({ audioFile: updatedFile });
+    persistLoops(updatedFile);
   },
 
   async scanFiles() {

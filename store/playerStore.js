@@ -1,58 +1,20 @@
 import { create } from 'zustand';
+import { FileSystemAdapter } from '../utils/fileSystemAdapter';
+import { getAudio, setAudioPlaybackMode, setAudioInactive } from '../utils/audioAdapter';
 
-// Synchronous mock for expo-file-system — available immediately
-const FileSystemMock = {
-  documentDirectory: 'file:///expo-go-mock/',
-  cacheDirectory: 'file:///expo-go-mock-cache/',
-  async readDirectoryAsync() { return []; },
-  async copyAsync() {},
-  async deleteAsync() {},
-  async getInfoAsync() { return { exists: false }; },
-  async makeDirectoryAsync() {},
-  async writeAsStringAsync() {},
-  async readAsStringAsync() { return '[]'; },
-};
-
-// Try to load real expo-file-system, fall back to mock
-let FileSystem = FileSystemMock;
-try {
-  const realFS = require('expo-file-system');
-  if (realFS && realFS.documentDirectory) {
-    FileSystem = realFS;
-  }
-} catch (e) {
-  // expo-file-system not available in Expo Go — use mock
-}
-
-// Lazy-load expo-av only when needed
-let Audio = null;
-async function getAudio() {
-  if (!Audio) {
-    try {
-      const av = await import('expo-av');
-      Audio = av.Audio;
-    } catch (e) {
-      Audio = {
-        Sound: class Sound {
-          async loadAsync() {}
-          async playAsync() {}
-          async pauseAsync() {}
-          async stopAsync() {}
-          async unloadAsync() {}
-          async setPositionAsync() {}
-          async setRateAsync() {}
-          async setIsAsyncEnabledAsync() {}
-          async getStatusAsync() {
-            return { positionMillis: 0, durationMillis: 0, isPlaying: false };
-          }
-        },
-      };
-    }
-  }
-  return Audio;
-}
+// Use the new SDK 54 filesystem API (Paths.document/File/Directory), adapted
+// to the legacy interface this store was written against.
+const FileSystem = FileSystemAdapter;
 
 const DOCUMENTS_DIR = FileSystem.documentDirectory;
+
+// Safe unique ID generator (React Native may not expose a global `crypto`).
+function generateId(prefix) {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
 
 export const usePlayerStore = create((set, get) => ({
   selectedFile: null,
@@ -71,9 +33,14 @@ export const usePlayerStore = create((set, get) => ({
   ayahMarkers: [],
   currentAyahIndex: -1,
   surahData: null,
+  loadError: null,
   sessionHistory: [],
   totalRepeats: 0,
   totalPlayTime: 0,
+  quranSurahEnabled: false,
+  colorScheme: 'dark',
+  customAccent: '#1F6FEB',
+  skipSeconds: 5,
 
   async loadFile(file) {
     const AudioModule = await getAudio();
@@ -81,7 +48,7 @@ export const usePlayerStore = create((set, get) => ({
     if (sound) { await sound.stopAsync(); await sound.unloadAsync(); }
     try {
       const newSound = new AudioModule.Sound();
-      await newSound.loadAsync({ uri: file.uri }, {}, true);
+      await newSound.loadAsync({ uri: file.uri, title: file.name }, {}, true);
       const status = await newSound.getStatusAsync();
       const dur = status.durationMillis ? status.durationMillis / 1000 : 0;
       const savedSpeed = lastSession?.speed || 1.0;
@@ -97,12 +64,19 @@ export const usePlayerStore = create((set, get) => ({
         playbackRate: savedSpeed,
         ayahMarkers,
         currentAyahIndex: -1,
+        loadError: null,
       });
-      if (savedSpeed !== 1.0 && sound) {
+      // Wire up native status updates (emits ~every 100ms during playback)
+      newSound.setOnStatus((status) => {
+        get()._onTimeUpdate(status);
+      });
+      if (savedSpeed !== 1.0) {
         try { await newSound.setRateAsync(savedSpeed, true); } catch {}
       }
     } catch (e) {
-      console.error('Failed to load audio:', e);
+      const errMsg = e && (e.message || e.code) ? `${e.message || ''}${e.code ? ' (' + e.code + ')' : ''}` : String(e);
+      set({ loadError: errMsg });
+      console.error('LOAD_FILE FAILED:', errMsg, e);
     }
   },
 
@@ -110,6 +84,7 @@ export const usePlayerStore = create((set, get) => ({
     const { sound } = get();
     if (!sound) return;
     try {
+      try { await setAudioPlaybackMode(); } catch (e) { console.warn('setAudioMode failed', e); }
       await sound.playAsync();
       await sound.setIsAsyncEnabledAsync(true);
       set({ isPlaying: true });
@@ -124,6 +99,7 @@ export const usePlayerStore = create((set, get) => ({
       await sound.pauseAsync();
       set({ isPlaying: false });
       get()._stopProgress();
+      try { await setAudioInactive(); } catch (e) {}
     } catch (e) { console.error(e); }
   },
 
@@ -140,6 +116,7 @@ export const usePlayerStore = create((set, get) => ({
       await sound.stopAsync();
       set({ isPlaying: false, currentTime: 0 });
       get()._stopProgress();
+      try { await setAudioInactive(); } catch (e) {}
     } catch (e) { console.error(e); }
   },
 
@@ -187,11 +164,11 @@ export const usePlayerStore = create((set, get) => ({
     const { audioFile } = get();
     if (!audioFile) return null;
     const loop = {
-      id: crypto.randomUUID?.() || Date.now().toString(),
+      id: generateId('loop'),
       name, pointA, pointB, delay,
       createdAt: Date.now(),
     };
-    const newLoops = [...audioFile.savedLoops, loop];
+    const newLoops = [...(audioFile.savedLoops || []), loop];
     const updatedFile = { ...audioFile, savedLoops: newLoops };
     set({ audioFile: updatedFile });
     persistLoops(updatedFile);
@@ -219,7 +196,7 @@ export const usePlayerStore = create((set, get) => ({
   async scanFiles() {
     try {
       const dir = DOCUMENTS_DIR;
-      const contents = await FileSystem.readDirectoryAsync(dir);
+      const contents = await FileSystemAdapter.readDirectoryAsync(dir);
       const audioExts = ['mp3', 'm4a', 'aac', 'wav', 'flac', 'ogg', 'aiff', 'wma'];
       const files = [];
       for (const item of contents) {
@@ -242,11 +219,11 @@ export const usePlayerStore = create((set, get) => ({
 
   async importFile(sourceUri) {
     try {
-      const filename = sourceUri.split('/').pop() || 'imported';
+      const filename = (sourceUri.split('/').pop() || 'imported').replace(/[?#].*$/, '');
       const destUri = DOCUMENTS_DIR + filename;
       await FileSystem.copyAsync({ from: sourceUri, to: destUri });
       await get().scanFiles();
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error('IMPORT_FILE error:', e); }
   },
 
   async deleteFile(file) {
@@ -303,7 +280,7 @@ export const usePlayerStore = create((set, get) => ({
     const { ayahMarkers, duration } = get();
     if (time < 0 || time > duration) return;
     const marker = {
-      id: crypto.randomUUID?.() || Date.now().toString(),
+      id: generateId('ayah'),
       time,
       surahNumber,
       ayahNumber,
@@ -335,6 +312,22 @@ export const usePlayerStore = create((set, get) => ({
     set({ surahData: data });
   },
 
+  setQuranSurahEnabled(enabled) {
+    set({ quranSurahEnabled: enabled });
+  },
+
+  setColorScheme(scheme) {
+    set({ colorScheme: scheme });
+  },
+
+  setCustomAccent(color) {
+    set({ customAccent: color });
+  },
+
+  setSkipSeconds(seconds) {
+    set({ skipSeconds: seconds });
+  },
+
   autoSplitAyahMarkers(numAyahs) {
     const { duration } = get();
     if (duration <= 0 || numAyahs <= 0) return;
@@ -358,66 +351,73 @@ export const usePlayerStore = create((set, get) => ({
 
   _progressTimer: null,
   _lastPointA: -1,
-  _startProgress() {
-    const { _stopProgress } = get();
-    _stopProgress();
-    const tick = async () => {
+  _onTimeUpdate(status) {
+    const current = (status && status.currentTime) || 0;
+    // Duration may arrive slightly later than load; update it when known.
+    const statusDur = (status && status.duration) || 0;
+    if (statusDur > 0 && Math.abs(get().duration - statusDur) > 0.01) {
+      set({ duration: statusDur });
+    }
+    const { duration, isPlaying } = get();
+    if (!isPlaying) return;
+    // Check end of track
+    if (current >= duration && duration > 0) {
+      set({ isPlaying: false, currentTime: current });
+      get()._stopProgress();
+      return;
+    }
+    const loop = get().loopRegion;
+    if (loop?.enabled && loop.pointB != null && current >= loop.pointB) {
+      const newCount = get().loopCounter + 1;
+      set({ loopCounter: newCount });
+      persistLoopCounts();
+      const milestones = [10, 25, 50, 100, 200, 500, 1000];
+      if (milestones.includes(newCount)) {
+        set({ milestone: newCount });
+      }
+      const loopMax = get().loopMax;
+      if (loopMax > 0 && newCount >= loopMax) {
+        const { sound } = get();
+        if (sound) sound.stopAsync();
+        set({ isPlaying: false, milestone: newCount });
+        get()._stopProgress();
+        return;
+      }
       const { sound } = get();
-      if (!sound) return;
-      try {
-        const status = await sound.getStatusAsync();
-        const current = (status.positionMillis || 0) / 1000;
-        const dur = status.durationMillis ? status.durationMillis / 1000 : 0;
-        const loop = get().loopRegion;
-        if (loop?.enabled && current >= loop.pointB) {
-          const newCount = get().loopCounter + 1;
-          set({ loopCounter: newCount });
-          persistLoopCounts();
-          const milestones = [10, 25, 50, 100, 200, 500, 1000];
-          if (milestones.includes(newCount)) {
-            set({ milestone: newCount });
-          }
-          const loopMax = get().loopMax;
-          if (loopMax > 0 && newCount >= loopMax) {
-            await sound.stopAsync();
-            set({ isPlaying: false, milestone: newCount });
-            get()._stopProgress();
-            return;
-          }
-          if (loop.delay > 0) {
-            await sound.stopAsync();
-            setTimeout(async () => {
-              await sound.setPositionAsync(loop.pointA * 1000);
-              await sound.playAsync();
-              get()._startProgress();
-            }, loop.delay * 1000);
-            set({ isPlaying: false });
-            get()._stopProgress();
-            return;
-          } else {
+      if (sound) {
+        if (loop.delay > 0) {
+          sound.stopAsync();
+          setTimeout(async () => {
             await sound.setPositionAsync(loop.pointA * 1000);
-          }
-        }
-        if (!loop?.enabled && current >= dur && dur > 0) {
-          set({ isPlaying: false, currentTime: current });
+            await sound.playAsync();
+            get()._startProgress();
+          }, loop.delay * 1000);
+          set({ isPlaying: false });
           get()._stopProgress();
           return;
+        } else {
+          sound.setPositionAsync(loop.pointA * 1000);
         }
-        set({ currentTime: current });
-        const markers = get().ayahMarkers;
-        if (markers.length > 0) {
-          let idx = -1;
-          for (let i = markers.length - 1; i >= 0; i--) {
-            if (current >= markers[i].time) { idx = i; break; }
-          }
-          if (idx !== get().currentAyahIndex) {
-            set({ currentAyahIndex: idx });
-          }
-        }
-      } catch (e) { /* ignore */ }
-    };
-    const timer = setInterval(tick, 250);
-    set({ _progressTimer: timer });
+      }
+    }
+    set({ currentTime: current });
+    // Update ayah index
+    const markers = get().ayahMarkers;
+    if (markers.length > 0) {
+      let idx = -1;
+      for (let i = markers.length - 1; i >= 0; i--) {
+        if (current >= markers[i].time) { idx = i; break; }
+      }
+      if (idx !== get().currentAyahIndex) {
+        set({ currentAyahIndex: idx });
+      }
+    }
+  },
+  _startProgress() {
+    // No-op: time updates come from native events via _onTimeUpdate
+    // Kept for compatibility with delay-based loop restarts
+    const { _stopProgress } = get();
+    _stopProgress();
   },
   _stopProgress() {
     const { _progressTimer } = get();

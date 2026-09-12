@@ -33,6 +33,13 @@ yarn-error.*
 # local env files
 .env*.local
 
+# secrets (service accounts, API keys)
+secrets/
+*.json.aes
+
+# raw screenshot source images
+assets/WhatsApp Image*
+
 # typescript
 *.tsbuildinfo
 

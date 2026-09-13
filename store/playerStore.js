@@ -161,7 +161,7 @@ export const usePlayerStore = create((set, get) => ({
   },
 
   saveLoop(name, pointA, pointB, delay) {
-    const { audioFile } = get();
+    const { audioFile, library } = get();
     if (!audioFile) return null;
     const loop = {
       id: generateId('loop'),
@@ -170,7 +170,10 @@ export const usePlayerStore = create((set, get) => ({
     };
     const newLoops = [...(audioFile.savedLoops || []), loop];
     const updatedFile = { ...audioFile, savedLoops: newLoops };
-    set({ audioFile: updatedFile });
+    set({
+      audioFile: updatedFile,
+      library: (library || []).map(f => f.id === audioFile.id ? { ...f, savedLoops: newLoops } : f),
+    });
     persistLoops(updatedFile);
     return loop;
   },
@@ -185,11 +188,14 @@ export const usePlayerStore = create((set, get) => ({
   },
 
   deleteLoop(loopId) {
-    const { audioFile } = get();
+    const { audioFile, library } = get();
     if (!audioFile) return;
-    const newLoops = audioFile.savedLoops.filter(l => l.id !== loopId);
+    const newLoops = (audioFile.savedLoops || []).filter(l => l.id !== loopId);
     const updatedFile = { ...audioFile, savedLoops: newLoops };
-    set({ audioFile: updatedFile });
+    set({
+      audioFile: updatedFile,
+      library: (library || []).map(f => f.id === audioFile.id ? { ...f, savedLoops: newLoops } : f),
+    });
     persistLoops(updatedFile);
   },
 

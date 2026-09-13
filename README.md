@@ -19,6 +19,20 @@ Built for musicians, language learners, Quran recitation practice, and anyone wh
 - **Background Playback** — Keep looping with the screen off; lock-screen controls supported.
 - **Theming** — Dark, Midnight, Ocean, Charcoal, and White, plus a custom accent color.
 
+## Setting a Loop Time
+
+Tap the **Time** button on the player to open **Set Loop Time**. You enter two points: **A** (where the loop starts) and **B** (where it restarts). Both fields are required.
+
+Each point can be entered in either format:
+- **minutes:seconds** — e.g. `2:30` = 2 minutes 30 seconds
+- **plain seconds** — e.g. `90` = 90 seconds
+
+**Example — repeat a 90-second section:**
+- Set **A** = `0:00` (or wherever the section starts)
+- Set **B** = `90` (90 seconds later)
+
+On **Apply**, the audio jumps to A and repeats A→B until you stop it or reach your repeat limit.
+
 ## Tech Stack
 
 - React Native + Expo (SDK 54)

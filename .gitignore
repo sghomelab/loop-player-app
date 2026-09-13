@@ -46,3 +46,7 @@ assets/WhatsApp Image*
 # generated native folders
 /ios
 /android
+
+# release check artifacts
+RELEASE_STATUS.md
+release_check.log

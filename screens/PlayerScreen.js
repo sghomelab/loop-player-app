@@ -50,7 +50,13 @@ export default function PlayerScreen({ navigation }) {
   const toastTimeoutRef = useRef(null);
 
   useEffect(() => {
-    if (selectedFile) loadFile(selectedFile);
+    if (!selectedFile) return;
+    // Avoid destructively re-loading a file that is already loaded (e.g. when
+    // this screen remounts after navigating away and back). Preserves the
+    // current loop, saved loops, and playback position.
+    const state = usePlayerStore.getState();
+    if (state.audioFile?.id === selectedFile.id && state.sound) return;
+    loadFile(selectedFile);
   }, [selectedFile]);
 
   useEffect(() => {
@@ -108,21 +114,28 @@ export default function PlayerScreen({ navigation }) {
   };
 
   const handleApplyTime = () => {
-    const a = timeA.trim() === '' ? null : parseTime(timeA);
-    const b = timeB.trim() === '' ? null : parseTime(timeB);
-    if (timeA.trim() !== '' && a === null) { setTimeError('Invalid time for A'); return; }
-    if (timeB.trim() !== '' && b === null) { setTimeError('Invalid time for B'); return; }
-    if (a !== null && a < 0) { setTimeError('Time A must be 0 or greater'); return; }
-    if (b !== null && b < 0) { setTimeError('Time B must be 0 or greater'); return; }
-    if (a !== null && b !== null && a >= b) { setTimeError('A must be before B'); return; }
-    if (a !== null && duration > 0 && a > duration) { setTimeError('A is beyond track length'); return; }
-    if (b !== null && duration > 0 && b > duration) { setTimeError('B is beyond track length'); return; }
+    const aEmpty = timeA.trim() === '';
+    const bEmpty = timeB.trim() === '';
+    if (aEmpty && bEmpty) { setTimeError('Please enter both Loop Start (A) and Loop End (B)'); return; }
+    if (aEmpty) { setTimeError('Loop Start (A) is not filled in'); return; }
+    if (bEmpty) { setTimeError('Loop End (B) is not filled in'); return; }
+    const a = parseTime(timeA);
+    const b = parseTime(timeB);
+    if (a === null) { setTimeError('Loop Start (A) is not a valid time'); return; }
+    if (b === null) { setTimeError('Loop End (B) is not a valid time'); return; }
+    if (a < 0) { setTimeError('Time A must be 0 or greater'); return; }
+    if (b < 0) { setTimeError('Time B must be 0 or greater'); return; }
+    if (a >= b) { setTimeError('A must be before B'); return; }
+    if (duration > 0 && a > duration) { setTimeError('A is beyond track length'); return; }
+    if (duration > 0 && b > duration) { setTimeError('B is beyond track length'); return; }
     const next = loopRegion ? { ...loopRegion } : { delay: 0, enabled: false };
-    if (a !== null) next.pointA = a;
-    if (b !== null) next.pointB = b;
-    if (a !== null && b !== null) next.enabled = true;
+    next.pointA = a;
+    next.pointB = b;
+    next.enabled = true;
     setLoopRegion(next);
     setShowTimeInput(false);
+    // Jump the audio to the loop start so it immediately follows the loop timing.
+    seekTo(a);
     showToast('Loop time updated');
   };
 
@@ -547,18 +560,20 @@ export default function PlayerScreen({ navigation }) {
         <View style={s.modalOverlay}>
           <View style={[s.modalContent, { backgroundColor: theme.card }]}>
             <Text style={[s.modalTitle, { color: theme.text }]}>Set Loop Time</Text>
-            <Text style={{ fontSize: 13, color: theme.muted, marginBottom: 12 }}>
-              Enter exact times for A and/or B. Use M:SS (e.g. 1:30) or seconds (e.g. 90).
+            <Text style={{ fontSize: 13, color: theme.muted, marginBottom: 12, lineHeight: 18 }}>
+              Enter the loop start (A) and end (B) in minutes:seconds (e.g. 2:30) or plain
+              seconds (e.g. 90 = 90 sec). To repeat a 90-second section, set A to where it
+              starts and B to 90 seconds later.
             </Text>
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 12, color: '#58A6FF', marginBottom: 4, fontWeight: '600' }}>Point A</Text>
                 <TextInput
                   style={[s.input, { color: theme.text, borderColor: theme.divider, backgroundColor: theme.bg, fontFamily: 'monospace' }]}
-                  placeholder="0:00"
-                  placeholderTextColor={theme.muted}
                   value={timeA}
                   onChangeText={setTimeA}
+                  placeholder="e.g. 0:00 or 0"
+                  placeholderTextColor={theme.muted}
                   keyboardType="numbers-and-punctuation"
                   autoCapitalize="none"
                   autoFocus
@@ -568,7 +583,7 @@ export default function PlayerScreen({ navigation }) {
                 <Text style={{ fontSize: 12, color: '#D29922', marginBottom: 4, fontWeight: '600' }}>Point B</Text>
                 <TextInput
                   style={[s.input, { color: theme.text, borderColor: theme.divider, backgroundColor: theme.bg, fontFamily: 'monospace' }]}
-                  placeholder={duration > 0 ? formatTime(duration) : '0:00'}
+                  placeholder="e.g. 1:30 or 90"
                   placeholderTextColor={theme.muted}
                   value={timeB}
                   onChangeText={setTimeB}
@@ -581,7 +596,7 @@ export default function PlayerScreen({ navigation }) {
               <Text style={{ fontSize: 13, color: '#F85149', marginTop: 10 }}>{timeError}</Text>
             ) : (
               <Text style={{ fontSize: 12, color: theme.muted, marginTop: 10, textAlign: 'center' }}>
-                Leave a field blank to keep its current value.
+                Both fields are required — A is where the loop starts, B is where it restarts.
               </Text>
             )}
             <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>

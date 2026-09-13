@@ -2,6 +2,16 @@
 
 All notable changes to Loop Deck are documented here.
 
+## [1.0.2] — 2026-09-13
+
+### Fixed
+- Saved loops (and the current loop) were lost after navigating away from the player and back. The player now keeps the loaded file's state instead of reloading it.
+- Manual "Set Loop Time" did not move the audio. It now jumps to point A immediately and follows the A→B loop.
+
+### Changed
+- Set Loop Time now requires both A and B; a blank field is flagged by name.
+- Clearer instructions in the Set Loop Time screen (e.g. `90` = 90 seconds, `1:30` = 1 min 30 sec).
+
 ## [1.0.1] — 2026-09-12
 
 ### Added

@@ -3,7 +3,7 @@ import {
   View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Modal, Switch, ScrollView,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { usePlayerStore } from '../store/playerStore';
+import { usePlayerStore, DUCK_LEVELS } from '../store/playerStore';
 import { COLOR_SCHEMES, getTheme } from '../lib/theme';
 
 const SCHEME_KEYS = Object.keys(COLOR_SCHEMES);
@@ -17,7 +17,7 @@ const PALETTE = [
 ];
 
 export default function SettingsScreen({ navigation }) {
-  const { quranSurahEnabled, setQuranSurahEnabled, colorScheme, setColorScheme, customAccent, setCustomAccent, skipSeconds, setSkipSeconds } = usePlayerStore();
+  const { quranSurahEnabled, setQuranSurahEnabled, colorScheme, setColorScheme, customAccent, setCustomAccent, skipSeconds, setSkipSeconds, duckLevel, setDuckLevel } = usePlayerStore();
   const [showPicker, setShowPicker] = useState(false);
 
   const currentTheme = getTheme(colorScheme, customAccent);
@@ -112,6 +112,31 @@ export default function SettingsScreen({ navigation }) {
               >
                 <Text style={{ color: skipSeconds === opt ? '#fff' : currentTheme.text, fontSize: 14, fontWeight: '600', fontFamily: 'monospace' }}>
                   {opt}s
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+        <View style={[styles.settingRow, { backgroundColor: currentTheme.card, flexDirection: 'column', alignItems: 'stretch' }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <MaterialCommunityIcons name="volume-variant" size={18} color={currentTheme.accent} />
+            <Text style={[styles.settingLabel, { color: currentTheme.text }]}>Duck / Isolate</Text>
+          </View>
+          <Text style={[styles.settingDesc, { color: currentTheme.muted, marginBottom: 12 }]}>
+            Lowers the original so you can focus on your own part (Karaoke mode). Currently {DUCK_LEVELS[duckLevel].label}.
+          </Text>
+          <View style={[styles.skipRow, { flexWrap: 'wrap' }]}>
+            {DUCK_LEVELS.map((lvl, i) => (
+              <TouchableOpacity
+                key={lvl.label}
+                style={[
+                  styles.skipChip,
+                  { backgroundColor: duckLevel === i ? currentTheme.accent : currentTheme.divider },
+                ]}
+                onPress={() => setDuckLevel(i)}
+              >
+                <Text style={{ color: duckLevel === i ? '#fff' : currentTheme.text, fontSize: 14, fontWeight: '600' }}>
+                  {lvl.label}
                 </Text>
               </TouchableOpacity>
             ))}

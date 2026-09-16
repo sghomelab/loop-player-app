@@ -10,6 +10,7 @@ Built for musicians, language learners, Quran recitation practice, and anyone wh
 - **Repeat Counter** — Track how many times a section has looped, with an optional auto-stop after N repeats and milestone notifications.
 - **Loop Delay** — Add a pause between loops for breathing room or note-taking.
 - **Speed Control** — Play back from 0.25x to 4.0x.
+- **Duck / Isolate (Karaoke mode)** — Lower the original's volume (−6, −12, −18 dB, or mute) so you can focus on singing or playing your own part.
 - **Configurable Skip** — Jump forward/backward by a custom amount (3s to 30s, set in Settings).
 - **Jump to Loop Start/End** — Return instantly to the beginning or end of your loop (or the track if no loop is set).
 - **Manual Time Entry** — Set exact A/B points by typing them in (M:SS or seconds).
@@ -32,6 +33,20 @@ Each point can be entered in either format:
 - Set **B** = `90` (90 seconds later)
 
 On **Apply**, the audio jumps to A and repeats A→B until you stop it or reach your repeat limit.
+
+## Ducking / Isolate (Karaoke mode)
+
+Duck lowers the volume of the original recording so you can focus on your own part — sing the lead over a quieter band, or practice an instrument over the rest of the track.
+
+On the player (just below **Speed**) or in **Settings**, tap one of the levels:
+
+- **Off** — original plays at full volume (default).
+- **−6 dB** — gentle reduction.
+- **−12 dB** — noticeable reduction.
+- **−18 dB** — strong reduction, the original sits well back.
+- **Mute** — the original is silenced (play silent/your own audio).
+
+The level applies immediately (even while paused) and is remembered for the file you load next. Combine it with slow speed and looping to practise a hard section over a backing track.
 
 ## Tech Stack
 

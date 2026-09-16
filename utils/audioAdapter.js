@@ -110,6 +110,10 @@ async function getAudio() {
           if (this._player) this._player.setPlaybackRate(rate);
           return {};
         }
+        async setVolumeAsync(volume) {
+          if (this._player) this._player.setVolume(Math.max(0, Math.min(1, volume)));
+          return {};
+        }
         async setIsAsyncEnabledAsync() { return {}; }
         async getStatusAsync() {
           if (!this._player) return { positionMillis: 0, durationMillis: 0, isPlaying: false, isLoaded: false };

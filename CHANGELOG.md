@@ -2,6 +2,14 @@
 
 All notable changes to Loop Deck are documented here.
 
+## [1.1.0] — 2026-09-16
+
+### Added
+- **Duck / Isolate (Karaoke mode)** — lower the original's volume to focus on your own part. Five levels (Off / −6 / −12 / −18 dB / Mute), available on the player (below Speed) and in Settings. Applies immediately and is remembered for the file you load next.
+
+### Improved
+- The time display now follows the scrubber while you drag, and snaps to the real position on release.
+
 ## [1.0.2] — 2026-09-13
 
 ### Fixed

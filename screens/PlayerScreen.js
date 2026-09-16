@@ -6,7 +6,7 @@ import {
 import Slider from '@react-native-community/slider';
 import { Svg, Rect } from 'react-native-svg';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
-import { usePlayerStore } from '../store/playerStore';
+import { usePlayerStore, DUCK_LEVELS } from '../store/playerStore';
 import { formatTime, defaultLoopName, parseTime } from '../utils/formatTime';
 import { fetchSurah, searchSurah } from '../utils/quranText';
 import { COLOR_SCHEMES, getTheme } from '../lib/theme';
@@ -21,13 +21,13 @@ export default function PlayerScreen({ navigation }) {
   const store = usePlayerStore();
   const {
     audioFile, isPlaying, currentTime, duration, playbackRate,
-    loopRegion, loadFile, togglePlayPause, seekTo, setPlaybackRate,
+    loopRegion, loadFile, togglePlayPause, seekTo, setPlaybackRate, setDuckLevel,
     setLoopRegion, saveLoop, loadLoop: loadSavedLoop, deleteLoop,
     loopCounter, loopMax, milestone, setLoopMax, resetLoopCounter,
     saveSession,
     ayahMarkers, currentAyahIndex, setAyahMarkers, addAyahMarker,
     deleteAyahMarker, autoSplitAyahMarkers, surahData, setSurahData,
-    quranSurahEnabled, colorScheme, customAccent, skipSeconds,
+    quranSurahEnabled, colorScheme, customAccent, skipSeconds, duckLevel,
     loadError,
   } = store;
   const theme = getTheme(colorScheme, customAccent);
@@ -47,6 +47,7 @@ export default function PlayerScreen({ navigation }) {
   const [surahResults, setSurahResults] = useState([]);
   const [surahLoading, setSurahLoading] = useState(false);
   const [toast, setToast] = useState(null);
+  const [dragFraction, setDragFraction] = useState(null);
   const toastTimeoutRef = useRef(null);
 
   useEffect(() => {
@@ -258,6 +259,9 @@ export default function PlayerScreen({ navigation }) {
     ? ayahMarkers[currentAyahIndex]
     : null;
 
+  // While dragging the scrubber, show the time under the thumb; otherwise the real position.
+  const displayTime = dragFraction != null && duration > 0 ? dragFraction * duration : currentTime;
+
   if (!audioFile) {
     return (
       <SafeAreaView style={[s.container, { backgroundColor: theme.bg }]}>
@@ -423,6 +427,30 @@ export default function PlayerScreen({ navigation }) {
           </View>
         </View>
 
+        {/* Duck / Isolate */}
+        <View style={s.speedSection}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+            <Text style={{ fontSize: 13, color: theme.muted }}>Duck / Isolate</Text>
+            <Text style={{ fontSize: 13, color: duckLevel > 0 ? theme.accent : theme.muted, fontWeight: '600' }}>
+              {DUCK_LEVELS[duckLevel].label}
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {DUCK_LEVELS.map((lvl, i) => (
+              <TouchableOpacity
+                key={lvl.label}
+                onPress={() => setDuckLevel(i)}
+                style={[s.actionChip, { backgroundColor: duckLevel === i ? theme.accent : theme.card, paddingHorizontal: 12, paddingVertical: 6 }]}
+              >
+                <Text style={[s.actionChipText, { color: duckLevel === i ? '#fff' : theme.text }]}>{lvl.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <Text style={{ fontSize: 11, color: theme.muted, marginTop: 8 }}>
+            Lowers the original so you can focus on your own part (Karaoke mode).
+          </Text>
+        </View>
+
         {/* Loop info card */}
         {loopActive && (
           <View style={[s.loopInfoCard, { backgroundColor: theme.card }]}>
@@ -485,6 +513,7 @@ export default function PlayerScreen({ navigation }) {
           loopRegion={loopRegion}
           duration={duration}
           onSeek={seekTo}
+          onDragChange={setDragFraction}
           s={s}
           theme={theme}
         />
@@ -492,8 +521,8 @@ export default function PlayerScreen({ navigation }) {
 
       {/* Time row */}
       <View style={s.timeRow}>
-        <Text style={[s.timeText, { color: theme.muted }]}>{formatTime(currentTime)}</Text>
-        <Text style={[s.timeText, { color: theme.muted }]}>−{formatTime(Math.max(0, duration - currentTime))}</Text>
+        <Text style={[s.timeText, { color: theme.muted }]}>{formatTime(displayTime)}</Text>
+        <Text style={[s.timeText, { color: theme.muted }]}>−{formatTime(Math.max(0, duration - displayTime))}</Text>
       </View>
 
       {/* Transport controls */}
@@ -845,7 +874,7 @@ function WaveformWithMarkers({ duration, currentTime, loopRegion, ayahMarkers, o
   );
 }
 
-function LoopProgressTrack({ progress, loopRegion, duration, onSeek, s, theme }) {
+function LoopProgressTrack({ progress, loopRegion, duration, onSeek, onDragChange, s, theme }) {
   const [dragging, setDragging] = useState(false);
   const [dragValue, setDragValue] = useState(0);
 
@@ -875,11 +904,12 @@ function LoopProgressTrack({ progress, loopRegion, duration, onSeek, s, theme })
       )}
       <Slider
         value={Number.isFinite(displayValue) ? displayValue : 0}
-        onSlidingStart={() => setDragging(true)}
-        onValueChange={(p) => setDragValue(p)}
+        onSlidingStart={() => { setDragging(true); onDragChange?.(progress); }}
+        onValueChange={(p) => { setDragValue(p); onDragChange?.(p); }}
         onSlidingComplete={(p) => {
           setDragging(false);
           setDragValue(p);
+          onDragChange?.(null);
           if (duration > 0) onSeek(p * duration);
         }}
         minimumValue={0}

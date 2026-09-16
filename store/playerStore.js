@@ -8,6 +8,16 @@ const FileSystem = FileSystemAdapter;
 
 const DOCUMENTS_DIR = FileSystem.documentDirectory;
 
+// Duck / isolate levels — how much to lower the original's volume so you can
+// focus on your own part (sing/play over a quieter backing).
+export const DUCK_LEVELS = [
+  { label: 'Off', volume: 1.0 },
+  { label: '-6 dB', volume: 0.5 },
+  { label: '-12 dB', volume: 0.25 },
+  { label: '-18 dB', volume: 0.12 },
+  { label: 'Mute', volume: 0.0 },
+];
+
 // Safe unique ID generator (React Native may not expose a global `crypto`).
 function generateId(prefix) {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -41,6 +51,7 @@ export const usePlayerStore = create((set, get) => ({
   colorScheme: 'dark',
   customAccent: '#1F6FEB',
   skipSeconds: 5,
+  duckLevel: 0,
 
   async loadFile(file) {
     const AudioModule = await getAudio();
@@ -73,6 +84,8 @@ export const usePlayerStore = create((set, get) => ({
       if (savedSpeed !== 1.0) {
         try { await newSound.setRateAsync(savedSpeed, true); } catch {}
       }
+      // Apply the current duck/isolate level to the fresh player.
+      try { newSound.setVolumeAsync((DUCK_LEVELS[get().duckLevel] || DUCK_LEVELS[0]).volume); } catch {}
     } catch (e) {
       const errMsg = e && (e.message || e.code) ? `${e.message || ''}${e.code ? ' (' + e.code + ')' : ''}` : String(e);
       set({ loadError: errMsg });
@@ -332,6 +345,19 @@ export const usePlayerStore = create((set, get) => ({
 
   setSkipSeconds(seconds) {
     set({ skipSeconds: seconds });
+  },
+
+  _applyDuck() {
+    const { sound, duckLevel } = get();
+    if (!sound) return;
+    const level = DUCK_LEVELS[duckLevel] || DUCK_LEVELS[0];
+    try { sound.setVolumeAsync(level.volume); } catch (e) {}
+  },
+
+  setDuckLevel(level) {
+    const clamped = Math.max(0, Math.min(DUCK_LEVELS.length - 1, level));
+    set({ duckLevel: clamped });
+    get()._applyDuck();
   },
 
   autoSplitAyahMarkers(numAyahs) {

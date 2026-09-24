@@ -2,6 +2,11 @@
 
 All notable changes to Loop Deck are documented here.
 
+## [1.1.1] — 2026-09-21
+
+### Fixed
+- **Duck / Isolate was not actually lowering the volume** (it used an invalid `setVolume` call that silently did nothing). Now it correctly sets the player volume, so the levels (−6/−12/−18 dB and Mute) work as intended.
+
 ## [1.1.0] — 2026-09-16
 
 ### Added

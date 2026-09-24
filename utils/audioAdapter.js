@@ -111,7 +111,7 @@ async function getAudio() {
           return {};
         }
         async setVolumeAsync(volume) {
-          if (this._player) this._player.setVolume(Math.max(0, Math.min(1, volume)));
+          if (this._player) this._player.volume = Math.max(0, Math.min(1, volume));
           return {};
         }
         async setIsAsyncEnabledAsync() { return {}; }

@@ -94,10 +94,16 @@ export const usePlayerStore = create((set, get) => ({
   },
 
   async play() {
-    const { sound } = get();
+    const { sound, loopRegion, currentTime } = get();
     if (!sound) return;
     try {
       try { await setAudioPlaybackMode(); } catch (e) { console.warn('setAudioMode failed', e); }
+      if (loopRegion?.enabled && loopRegion.pointA != null && loopRegion.pointB != null) {
+        if (currentTime < loopRegion.pointA || currentTime >= loopRegion.pointB) {
+          await sound.setPositionAsync(loopRegion.pointA * 1000);
+          set({ currentTime: loopRegion.pointA });
+        }
+      }
       await sound.playAsync();
       await sound.setIsAsyncEnabledAsync(true);
       set({ isPlaying: true });
@@ -276,15 +282,47 @@ export const usePlayerStore = create((set, get) => ({
     persistSessionHistory(updatedHistory, newTotalRepeats, newTotalPlayTime);
   },
 
-  restoreSession() {
-    const session = loadSession();
-    if (!session) return;
-    const history = loadSessionHistory();
+  async restoreSession() {
+    const [session, history] = await Promise.all([loadSession(), loadSessionHistory()]);
     if (history) {
       set({ sessionHistory: history.history || [], totalRepeats: history.totalRepeats || 0, totalPlayTime: history.totalPlayTime || 0 });
     }
-    set({ lastSession: session });
+    if (session) set({ lastSession: session });
     return session;
+  },
+
+  async clearSessionHistory() {
+    set({ sessionHistory: [], totalRepeats: 0, totalPlayTime: 0, lastSession: null });
+    try {
+      await FileSystem.deleteAsync(DOCUMENTS_DIR + '.loop-player-history.json', { idempotent: true });
+      await FileSystem.deleteAsync(DOCUMENTS_DIR + '.loop-player-session.json', { idempotent: true });
+    } catch (e) { console.error('clearSessionHistory error:', e); }
+  },
+
+  async deleteLoopByFile(fileName, loopId) {
+    const { library } = get();
+    const file = library.find(f => f.name === fileName);
+    if (!file) return;
+    const newLoops = (file.savedLoops || []).filter(l => l.id !== loopId);
+    const updatedFile = { ...file, savedLoops: newLoops };
+    const updatedLibrary = library.map(f => f.id === file.id ? updatedFile : f);
+    const { audioFile } = get();
+    if (audioFile?.id === file.id) {
+      set({ library: updatedLibrary, audioFile: updatedFile });
+    } else {
+      set({ library: updatedLibrary });
+    }
+    await persistLoops(updatedFile);
+  },
+
+  async deleteAllLoops() {
+    const { library, audioFile } = get();
+    const updatedLibrary = (library || []).map(f => ({ ...f, savedLoops: [] }));
+    const updatedAudio = audioFile ? { ...audioFile, savedLoops: [] } : null;
+    set({ library: updatedLibrary, audioFile: updatedAudio });
+    for (const f of updatedLibrary) {
+      await persistLoops(f);
+    }
   },
 
   setAyahMarkers(markers) {
@@ -487,10 +525,12 @@ async function persistSession(session) {
   );
 }
 
-function loadSession() {
+async function loadSession() {
   try {
     const path = DOCUMENTS_DIR + '.loop-player-session.json';
-    const raw = FileSystem.readAsStringAsync(path);
+    const info = await FileSystem.getInfoAsync(path);
+    if (!info.exists) return null;
+    const raw = await FileSystem.readAsStringAsync(path);
     if (raw && typeof raw === 'string') return JSON.parse(raw);
     return null;
   } catch { return null; }
@@ -536,10 +576,12 @@ async function persistSessionHistory(history, totalRepeats, totalPlayTime) {
   );
 }
 
-function loadSessionHistory() {
+async function loadSessionHistory() {
   try {
     const path = DOCUMENTS_DIR + '.loop-player-history.json';
-    const raw = FileSystem.readAsStringAsync(path);
+    const info = await FileSystem.getInfoAsync(path);
+    if (!info.exists) return null;
+    const raw = await FileSystem.readAsStringAsync(path);
     if (raw && typeof raw === 'string') return JSON.parse(raw);
     return null;
   } catch { return null; }

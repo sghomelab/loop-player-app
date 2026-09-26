@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Modal, Switch, ScrollView,
+  View, Text, TouchableOpacity, StyleSheet, SafeAreaView, Modal, Switch, ScrollView, Alert,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { usePlayerStore, DUCK_LEVELS } from '../store/playerStore';
 import { COLOR_SCHEMES, getTheme } from '../lib/theme';
+import { formatTime } from '../utils/formatTime';
 
 const SCHEME_KEYS = Object.keys(COLOR_SCHEMES);
 
@@ -17,10 +18,29 @@ const PALETTE = [
 ];
 
 export default function SettingsScreen({ navigation }) {
-  const { quranSurahEnabled, setQuranSurahEnabled, colorScheme, setColorScheme, customAccent, setCustomAccent, skipSeconds, setSkipSeconds, duckLevel, setDuckLevel } = usePlayerStore();
+  const { quranSurahEnabled, setQuranSurahEnabled, colorScheme, setColorScheme, customAccent, setCustomAccent, skipSeconds, setSkipSeconds, duckLevel, setDuckLevel, library, sessionHistory, totalRepeats, totalPlayTime, clearSessionHistory, deleteLoopByFile, deleteAllLoops } = usePlayerStore();
   const [showPicker, setShowPicker] = useState(false);
+  const [showAllLoops, setShowAllLoops] = useState(false);
 
   const currentTheme = getTheme(colorScheme, customAccent);
+
+  const allLoops = (library || []).flatMap(file =>
+    (file.savedLoops || []).map(loop => ({ ...loop, fileName: file.name, fileUri: file.uri }))
+  );
+
+  const handleClearHistory = () => {
+    Alert.alert('Clear Session History', 'This will delete all session history and reset totals. This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Clear', style: 'destructive', onPress: () => clearSessionHistory() },
+    ]);
+  };
+
+  const handleDeleteAllLoops = () => {
+    Alert.alert('Delete All Loops', `This will delete ALL ${allLoops.length} saved loop(s) across all files. This cannot be undone.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete All', style: 'destructive', onPress: () => deleteAllLoops() },
+    ]);
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: currentTheme.bg }]}>
@@ -142,6 +162,37 @@ export default function SettingsScreen({ navigation }) {
             ))}
           </View>
         </View>
+
+        {/* Data Management */}
+        <Text style={[styles.sectionTitle, { color: currentTheme.muted, marginTop: 24 }]}>Data</Text>
+        <View style={[styles.settingRow, { backgroundColor: currentTheme.card }]}>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <MaterialCommunityIcons name="history" size={18} color={currentTheme.accent} />
+              <Text style={[styles.settingLabel, { color: currentTheme.text }]}>Session History</Text>
+            </View>
+            <Text style={[styles.settingDesc, { color: currentTheme.muted }]}>
+              {sessionHistory?.length || 0} sessions · {totalRepeats || 0} repeats
+            </Text>
+          </View>
+          <TouchableOpacity onPress={handleClearHistory} style={[styles.dangerBtn, { backgroundColor: '#F8514920' }]}>
+            <Text style={{ color: '#F85149', fontWeight: '600', fontSize: 13 }}>Clear</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={[styles.settingRow, { backgroundColor: currentTheme.card }]}>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <MaterialCommunityIcons name="loop-variant" size={18} color={currentTheme.accent} />
+              <Text style={[styles.settingLabel, { color: currentTheme.text }]}>Saved Loops</Text>
+            </View>
+            <Text style={[styles.settingDesc, { color: currentTheme.muted }]}>
+              {allLoops.length} loop(s) across {library?.length || 0} file(s)
+            </Text>
+          </View>
+          <TouchableOpacity onPress={() => setShowAllLoops(true)} style={[styles.manageBtn, { backgroundColor: currentTheme.divider }]}>
+            <Text style={{ color: currentTheme.text, fontWeight: '600', fontSize: 13 }}>Manage</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
 
       {/* Color Picker Modal */}
@@ -173,6 +224,45 @@ export default function SettingsScreen({ navigation }) {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* All Loops Modal */}
+      <Modal visible={showAllLoops} transparent animationType="fade">
+        <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setShowAllLoops(false)}>
+          <View style={[styles.loopsModalContent, { backgroundColor: currentTheme.card }]} onStartShouldSetResponder={() => true}>
+            <Text style={[styles.pickerTitle, { color: currentTheme.text }]}>All Saved Loops ({allLoops.length})</Text>
+            <ScrollView style={{ maxHeight: 350 }}>
+              {allLoops.length === 0 ? (
+                <Text style={{ color: currentTheme.muted, textAlign: 'center', padding: 20 }}>No saved loops</Text>
+              ) : (
+                allLoops.map(loop => (
+                  <View key={loop.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: currentTheme.divider }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: currentTheme.text, fontWeight: '500' }}>{loop.name}</Text>
+                      <Text style={{ color: currentTheme.muted, fontSize: 12 }}>
+                        {loop.fileName} · {formatTime(loop.pointA)} → {formatTime(loop.pointB)}
+                      </Text>
+                    </View>
+                    <TouchableOpacity onPress={() => deleteLoopByFile(loop.fileName, loop.id)} style={{ padding: 8 }}>
+                      <MaterialCommunityIcons name="delete" size={20} color="#F85149" />
+                    </TouchableOpacity>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+              <TouchableOpacity
+                style={[styles.pickerBtn, { backgroundColor: '#F8514920' }, allLoops.length === 0 && { opacity: 0.4 }]}
+                onPress={allLoops.length > 0 ? handleDeleteAllLoops : undefined}
+              >
+                <Text style={{ color: '#F85149', fontWeight: '600' }}>Delete All</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.pickerBtn, { backgroundColor: currentTheme.divider }]} onPress={() => setShowAllLoops(false)}>
+                <Text style={{ color: currentTheme.text }}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -192,8 +282,11 @@ const styles = StyleSheet.create({
   },
   settingLabel: { fontSize: 15, fontWeight: '600' },
   settingDesc: { fontSize: 12, marginTop: 2 },
+  dangerBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
+  manageBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
   skipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   skipChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10 },
+  loopsModalContent: { width: '90%', borderRadius: 16, padding: 20, alignSelf: 'center', maxHeight: '75%' },
   schemeGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',

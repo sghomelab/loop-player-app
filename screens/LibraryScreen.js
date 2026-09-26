@@ -19,13 +19,12 @@ try {
 } catch {}
 
 export default function LibraryScreen({ navigation }) {
-  const { library, scanFiles, importFile, deleteFile, sessionHistory, totalRepeats, totalPlayTime, colorScheme, customAccent } = usePlayerStore();
+  const { library, scanFiles, importFile, deleteFile, sessionHistory, totalRepeats, totalPlayTime, colorScheme, customAccent, restoreSession } = usePlayerStore();
   const theme = getTheme(colorScheme, customAccent);
   const s = makeStyles(theme);
   const [showHistory, setShowHistory] = useState(false);
-  const [showFileLoops, setShowFileLoops] = useState(null);
 
-  React.useEffect(() => { scanFiles(); }, []);
+  React.useEffect(() => { restoreSession(); scanFiles(); }, []);
 
   const handleImport = async () => {
     try {

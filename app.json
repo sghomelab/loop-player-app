@@ -3,7 +3,7 @@
     "name": "Loop Deck",
     "icon": "./assets/icon.png",
     "slug": "loop-player",
-    "version": "1.1.1",
+    "version": "1.1.2",
     "orientation": "portrait",
     "scheme": "loopplayer",
     "userInterfaceStyle": "dark",
@@ -14,7 +14,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.nurlogic.loopplayer",
-      "buildNumber": "9",
+      "buildNumber": "10",
       "infoPlist": {
         "UIUserInterfaceStyle": "Dark",
         "UIBackgroundModes": [
@@ -29,7 +29,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.nurlogic.loopplayer",
-      "versionCode": 8,
+      "versionCode": 9,
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"

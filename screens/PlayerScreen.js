@@ -642,8 +642,8 @@ export default function PlayerScreen({ navigation }) {
 
       {/* Saved Loops Modal */}
       <Modal visible={showLoopsSheet} transparent animationType="fade">
-        <View style={s.modalOverlay}>
-          <View style={[s.modalContent, { maxHeight: '70%', backgroundColor: theme.card }]}>
+        <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPress={() => setShowLoopsSheet(false)}>
+          <View style={[s.modalContent, { maxHeight: '70%', backgroundColor: theme.card }]} onStartShouldSetResponder={() => true}>
             <Text style={[s.modalTitle, { color: theme.text }]}>Saved Loops</Text>
             <ScrollView style={{ maxHeight: 350 }}>
               {!(audioFile?.savedLoops?.length) ? (
@@ -668,7 +668,7 @@ export default function PlayerScreen({ navigation }) {
               <Text style={{ color: theme.text }}>Close</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </TouchableOpacity>
       </Modal>
 
       {/* Loop Max Modal */}

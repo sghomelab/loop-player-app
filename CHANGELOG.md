@@ -2,6 +2,16 @@
 
 All notable changes to Loop Deck are documented here.
 
+## [1.1.2] — 2026-09-24
+
+### Fixed
+- **Session history and stats no longer reset on app update** — the history file was read with a broken synchronous call that always returned empty. Now properly loaded on startup.
+- **Saved Loops popup could not be closed** — added tap-outside-to-dismiss so tapping the dark overlay closes the sheet (in addition to the Close button).
+
+### Added
+- **Settings → Data: Clear Session History** — one-tap (with confirmation) to wipe all session history and reset totals.
+- **Settings → Data: Manage Saved Loops** — lists every saved loop across all files. Delete individually or "Delete All" (with a warning showing the count before proceeding).
+
 ## [1.1.1] — 2026-09-21
 
 ### Fixed

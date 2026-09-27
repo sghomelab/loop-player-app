@@ -479,7 +479,14 @@ export const usePlayerStore = create((set, get) => ({
           return;
         } else {
           set({ _loopRestarting: true });
-          sound.setPositionAsync(loop.pointA * 1000);
+          (async () => {
+            try {
+              await sound.pauseAsync();
+              await sound.setPositionAsync(loop.pointA * 1000);
+              await sound.playAsync();
+              set({ _loopRestarting: false });
+            } catch (e) { console.error('loop restart failed:', e); }
+          })();
         }
       }
     }

@@ -888,19 +888,19 @@ function LoopProgressTrack({ progress, loopRegion, duration, onSeek, onDragChang
           style={[
             s.loopHighlight,
             {
-              left: (loopRegion.pointA / duration) * 100,
-              width: ((loopRegion.pointB - loopRegion.pointA) / duration) * 100,
+              left: `${(loopRegion.pointA / duration) * 100}%`,
+              width: `${((loopRegion.pointB - loopRegion.pointA) / duration) * 100}%`,
             },
           ]}
         />
       )}
       {/* A marker */}
       {loopRegion?.enabled && loopRegion.pointA != null && duration > 0 && (
-        <View style={[s.marker, { left: (loopRegion.pointA / duration) * 100, backgroundColor: '#58A6FF' }]} />
+        <View style={[s.marker, { left: `${(loopRegion.pointA / duration) * 100}%`, backgroundColor: '#58A6FF' }]} />
       )}
       {/* B marker */}
       {loopRegion?.enabled && loopRegion.pointB != null && duration > 0 && (
-        <View style={[s.marker, { left: (loopRegion.pointB / duration) * 100, backgroundColor: '#D29922' }]} />
+        <View style={[s.marker, { left: `${(loopRegion.pointB / duration) * 100}%`, backgroundColor: '#D29922' }]} />
       )}
       <Slider
         value={Number.isFinite(displayValue) ? displayValue : 0}

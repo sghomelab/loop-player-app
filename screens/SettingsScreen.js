@@ -6,6 +6,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { usePlayerStore, DUCK_LEVELS } from '../store/playerStore';
 import { COLOR_SCHEMES, getTheme } from '../lib/theme';
 import { formatTime } from '../utils/formatTime';
+import Constants from 'expo-constants';
 
 const SCHEME_KEYS = Object.keys(COLOR_SCHEMES);
 
@@ -193,6 +194,11 @@ export default function SettingsScreen({ navigation }) {
             <Text style={{ color: currentTheme.text, fontWeight: '600', fontSize: 13 }}>Manage</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Version */}
+        <Text style={{ color: currentTheme.muted, fontSize: 12, textAlign: 'center', marginTop: 24, marginBottom: 8 }}>
+          Loop Deck v{Constants.expoConfig?.version || '1.0.0'} (build {Constants.expoConfig?.ios?.buildNumber || Constants.expoConfig?.android?.versionCode || '?'})
+        </Text>
       </ScrollView>
 
       {/* Color Picker Modal */}

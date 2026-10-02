@@ -456,7 +456,7 @@ export const usePlayerStore = create((set, get) => ({
       const { sound } = get();
       if (sound) {
         const waitMs = (loop.delay || 0) * 1000 + 50;
-        sound.stopAsync();
+        sound.pauseAsync();
         set({ isPlaying: false });
         setTimeout(async () => {
           try {

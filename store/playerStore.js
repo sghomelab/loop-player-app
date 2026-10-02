@@ -421,7 +421,6 @@ export const usePlayerStore = create((set, get) => ({
 
   _progressTimer: null,
   _lastPointA: -1,
-  _loopRestarting: false,
   _onTimeUpdate(status) {
     const current = (status && status.currentTime) || 0;
     // Duration may arrive slightly later than load; update it when known.
@@ -431,15 +430,6 @@ export const usePlayerStore = create((set, get) => ({
     }
     const { duration, isPlaying } = get();
     if (!isPlaying) return;
-    // While a loop restart seek is in progress, ignore loop logic until
-    // the position has actually moved back near pointA.
-    if (get()._loopRestarting) {
-      const targetA = get().loopRegion?.pointA || 0;
-      if (current <= targetA + 0.5) {
-        set({ _loopRestarting: false, currentTime: current });
-      }
-      return;
-    }
     // Check end of track
     if (current >= duration && duration > 0) {
       set({ isPlaying: false, currentTime: current });
@@ -465,29 +455,17 @@ export const usePlayerStore = create((set, get) => ({
       }
       const { sound } = get();
       if (sound) {
-        if (loop.delay > 0) {
-          sound.stopAsync();
-          set({ isPlaying: false, _loopRestarting: true });
-          get()._stopProgress();
-          setTimeout(async () => {
-            try {
-              await sound.setPositionAsync(loop.pointA * 1000);
-              await sound.playAsync();
-              set({ isPlaying: true, _loopRestarting: false });
-            } catch (e) { console.error('loop delay restart failed:', e); }
-          }, loop.delay * 1000);
-          return;
-        } else {
-          set({ _loopRestarting: true });
-          (async () => {
-            try {
-              await sound.pauseAsync();
-              await sound.setPositionAsync(loop.pointA * 1000);
-              await sound.playAsync();
-              set({ _loopRestarting: false });
-            } catch (e) { console.error('loop restart failed:', e); }
-          })();
-        }
+        const waitMs = (loop.delay || 0) * 1000 + 50;
+        sound.stopAsync();
+        set({ isPlaying: false });
+        setTimeout(async () => {
+          try {
+            await sound.setPositionAsync(loop.pointA * 1000);
+            await sound.playAsync();
+            set({ isPlaying: true });
+          } catch (e) { console.error('loop restart failed:', e); }
+        }, waitMs);
+        return;
       }
     }
     set({ currentTime: current });
